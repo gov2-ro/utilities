@@ -1,0 +1,7 @@
+/tmp
+/data/*
+*.code-workspace
+*/_obsolete
+_obsolete
+gender_guesser/*
+*/gender_guesser/*
