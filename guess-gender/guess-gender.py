@@ -9,8 +9,7 @@ from unidecode import unidecode
 from nameparser import HumanName
 import gender_guesser.gender_guesser.detector as gender
 
-
-dbfile = '../data/guess-gender/candidati-alegeri-gender.db'
+dbfile = '../data/guess-gender/candidati-alegeri-gender-small.db'
 table_name = "Candidati alegeri RO"
 countstep = 5000
 
@@ -49,13 +48,7 @@ try:
 except sqlite3.Error as e:
     # print(f"Error: {e}")
     pass
-
-# Count the total number of rows in the table
-cursor.execute("SELECT COUNT(*) FROM '" + table_name + "' ")
-total_rows = cursor.fetchone()[0]
-
-progress_bar = tqdm(total=total_rows, desc="Processing Rows", unit=" row")
-tqdm.write(total_rows + ' rows')
+ 
 
 def process_row(row):
 
@@ -80,10 +73,10 @@ def process_row(row):
     else:
         zimiddle = ''
 
-    cursor.execute(
-        f"UPDATE '" + table_name +
-        "' SET firstName = ?, lastName = ?, middleName = ? WHERE Nume = ?",
-        (semantic_name.first, semantic_name.last, zimiddle, nume))
+    # cursor.execute(
+    #     f"UPDATE '" + table_name +
+    #     "' SET firstName = ?, lastName = ?, middleName = ? WHERE Nume = ?",
+    #     (semantic_name.first, semantic_name.last, zimiddle, nume))
 
     if zimiddle and d.get_gender(zimiddle) != 'unknown':
         gender = d.get_gender(zimiddle) + ' ' + d.get_gender(semantic_name.last)
@@ -94,40 +87,37 @@ def process_row(row):
     if gender == 'unknown':
         gender = d.get_gender(semantic_name.first) + ' +'
 
-    cursor.execute("UPDATE '" + table_name + "' SET gender = ? WHERE Nume = ?", (gender, nume))
+    # cursor.execute("UPDATE '" + table_name + "' SET gender = ? WHERE Nume = ?", (gender, nume))
 
-    pass
+    name_parts =  {
+        "first": semantic_name.first,
+        "middle": zimiddle,
+        "last": semantic_name.last,
+        "gender": gender,
+    }
 
+    return name_parts
 
-# tqdm batches
-""" cursor.execute("SELECT Nume FROM '" + table_name + "'")
-
-while True:
-    rows = cursor.fetchmany(500)
-    if not rows:
-        break
-    for row in rows:
-        process_row(row)
-        progress_bar.update(len(rows))  # Increment the progress bar
- """
-
-# one by one
 cursor.execute("SELECT Nume FROM '" + table_name + "'")
 rows = cursor.fetchall()
-xsteps = 0
+zsteps = xsteps = 0
+
 for row in rows:
     nume = row[0]  # Assuming 'Nume' is the correct column name
-    process_row(row)
+    ll = process_row(row)
     xsteps +=1
+    cursor.execute(
+        f"UPDATE '" + table_name +
+        "' SET firstName = ?, lastName = ?, middleName = ?, gender = ? WHERE Nume = ?",
+        (ll['first'], ll['last'], ll['middle'], ll['gender'], nume))
+    conn.commit()
     if xsteps >= countstep:
-        progress_bar.update(countstep)
-        xteps = 0 
-        conn.commit()
-
-
+        zsteps += 1
+        print(' - ' + str(zsteps))
+        xsteps = 0 
+       
+conn.commit()
 cursor.close()
 conn.close()
-
-progress_bar.close()
 
 print('DONE')
