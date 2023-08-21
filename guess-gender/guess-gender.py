@@ -12,9 +12,9 @@ import gender_guesser.gender_guesser.detector as gender
 
 dbfile = '../data/guess-gender/candidati-alegeri-gender.db'
 table_name = "Candidati alegeri RO"
+countstep = 5000
 
 d = gender.Detector()
-
 conn = sqlite3.connect(dbfile)
 cursor = conn.cursor()
 
@@ -55,10 +55,10 @@ cursor.execute("SELECT COUNT(*) FROM '" + table_name + "' ")
 total_rows = cursor.fetchone()[0]
 
 progress_bar = tqdm(total=total_rows, desc="Processing Rows", unit=" row")
-
+tqdm.write(total_rows + ' rows')
 
 def process_row(row):
-    
+
     nume = row[0]
     semantic_name = HumanName(nume)
     # break into names, see if >50% known gender
@@ -86,20 +86,22 @@ def process_row(row):
         (semantic_name.first, semantic_name.last, zimiddle, nume))
 
     if zimiddle and d.get_gender(zimiddle) != 'unknown':
-        gender = d.get_gender(unidecode(zimiddle)) + ' ' + d.get_gender(unidecode(semantic_name.last))
+        gender = d.get_gender(zimiddle) + ' ' + d.get_gender(semantic_name.last)
     else:
-        gender = d.get_gender(unidecode(semantic_name.last))
+        gender = d.get_gender(semantic_name.last)
 
     # if last + middle fail, try to look into first name
     if gender == 'unknown':
-        gender = d.get_gender(unidecode(semantic_name.first)) + ' +'
+        gender = d.get_gender(semantic_name.first) + ' +'
 
     cursor.execute("UPDATE '" + table_name + "' SET gender = ? WHERE Nume = ?", (gender, nume))
 
     pass
 
 
-cursor.execute("SELECT Nume FROM '" + table_name + "'")
+# tqdm batches
+""" cursor.execute("SELECT Nume FROM '" + table_name + "'")
+
 while True:
     rows = cursor.fetchmany(500)
     if not rows:
@@ -107,11 +109,22 @@ while True:
     for row in rows:
         process_row(row)
         progress_bar.update(len(rows))  # Increment the progress bar
+ """
 
-# Step 4: Commit the changes to the database
-conn.commit()
+# one by one
+cursor.execute("SELECT Nume FROM '" + table_name + "'")
+rows = cursor.fetchall()
+xsteps = 0
+for row in rows:
+    nume = row[0]  # Assuming 'Nume' is the correct column name
+    process_row(row)
+    xsteps +=1
+    if xsteps >= countstep:
+        progress_bar.update(countstep)
+        xteps = 0 
+        conn.commit()
 
-# Step 5: Close the cursor and the database connection
+
 cursor.close()
 conn.close()
 

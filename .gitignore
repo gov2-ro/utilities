@@ -1,4 +1,6 @@
 /tmp
+tmp_*
+*/tmp_*
 /data/*
 *.code-workspace
 */_obsolete
