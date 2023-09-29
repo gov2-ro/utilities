@@ -1,11 +1,15 @@
-import sqlite3
-import gender_guesser.gender_guesser.detector as gender
-from nameparser import HumanName
 
-# Define the database file path
 dbfile = '../data/guess-gender/candidati-alegeri-gender.db'
 table_name = "Candidati alegeri RO"
 countstep = 5000
+
+# TODO:
+# make it simple: break name into parts and detect gender for all 
+# todo++ build names from wikipedia
+
+import sqlite3
+import gender_guesser.gender_guesser.detector as gender
+from nameparser import HumanName
 
 
 d = gender.Detector()

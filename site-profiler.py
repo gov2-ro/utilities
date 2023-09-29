@@ -1,11 +1,17 @@
 import csv
 import sqlite3
-import requests json time
+import requests
+import time, socket
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 
 db_file = 'data/gov-sites.db'
 table_name = 'site_info'
-url_list_file = 'data/subdomenii.gov.ro.txt'
+url_list_file = 'data/subdomenii-gov.ro-clean.csv'
+zitimeout = 4
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36"
+}
 
 def create_table_if_not_exists(connection):
     cursor = connection.cursor()
@@ -18,7 +24,10 @@ def create_table_if_not_exists(connection):
             wp_json BOOLEAN,
             is_wp BOOLEAN,
             response_time REAL,
-            page_size INTEGER
+            page_size INTEGER,
+            ssl BOOLEAN,
+            fetch_date TEXT,
+            ip TEXT
         )
     ''')
     connection.commit()
@@ -26,14 +35,14 @@ def create_table_if_not_exists(connection):
 def insert_data(connection, data):
     cursor = connection.cursor()
     cursor.execute(f'''
-        INSERT INTO {table_name} (url, page_title, og_description, wp_json, is_wp, response_time, page_size)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO {table_name} (url, page_title, og_description, wp_json, is_wp, response_time, page_size, ssl, fetch_date, ip)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', data)
     connection.commit()
 
 def get_page_info(url):
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=headers, timeout=zitimeout)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         page_title = soup.title.string if soup.title else "No Title"
@@ -67,10 +76,20 @@ def get_performance(url):
     except requests.exceptions.RequestException:
         return -1, -1
 
+def get_ssl_and_ip(url):
+    try:
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc
+        fetch_date = time.strftime('%Y-%m-%d %H:%M:%S')
+        ip = socket.gethostbyname(domain)
+        ssl = parsed_url.scheme == 'https'
+        return ssl, fetch_date, ip
+    except socket.gaierror:
+        return False, None, None
 
 with open(url_list_file, 'r') as csv_file:
     csv_reader = csv.reader(csv_file)
-    next(csv_reader) 
+    next(csv_reader)
     urls = [row[0] for row in csv_reader]
 
 connection = sqlite3.connect(db_file)
@@ -78,11 +97,14 @@ connection = sqlite3.connect(db_file)
 create_table_if_not_exists(connection)
 
 for url in urls:
-    page_title, og_description = get_page_info(url)
-    wp_json, is_wp = check_wp(url)
-    response_time, page_size = get_performance(url)
+    print(url)
+    url_with_protocol = url if url.startswith(('http://', 'https://')) else f'http://{url}'
+    page_title, og_description = get_page_info(url_with_protocol)
+    wp_json, is_wp = check_wp(url_with_protocol)
+    response_time, page_size = get_performance(url_with_protocol)
+    ssl, fetch_date, ip = get_ssl_and_ip(url_with_protocol)
 
-    data = (url, page_title, og_description, wp_json, is_wp, response_time, page_size)
+    data = (url, page_title, og_description, wp_json, is_wp, response_time, page_size, ssl, fetch_date, ip)
     insert_data(connection, data)
-
+    print(page_title + ' ' + str(response_time) + ' ' + str(page_size) + ' ' + str(ssl))
 connection.close()
