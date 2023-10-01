@@ -1,9 +1,12 @@
 /tmp
 web-eyes
 data-profiler
+data
+flat-data viewer
 tmp_*
 */tmp_*
 /data/*
+*.log
 *.code-workspace
 */_obsolete
 _obsolete
