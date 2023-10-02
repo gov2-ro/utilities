@@ -11,8 +11,10 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 # Define the input CSV file and SQLite database file
-url_list_file = '../data/domainlist.csv'
-db_file = '../data/sites.db'
+# url_list_file = '../data/domainlist.csv'
+# db_file = '../data/sites.db'
+url_list_file = '../../data/site-profiles/domainlist2.csv'
+db_file = '../../data/site-profiles/sites-profiles-.db'
 # TODO: use If-None-Match / Etag 'If-None-Match': '"848f2-6067ebcfc4f9f-gzip"',
 timeout = 6
 headers = {

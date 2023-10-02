@@ -7,8 +7,9 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 # Define input and output file paths
-url_list_file = '../data/domainlist.csv'
-db_file = '../data/sites3.db'
+url_list_file = '../../data/site-profiles/domainlist2.csv'
+# db_file = '../data/sites3.db'
+db_file = '../../data/site-profiles/sites-profiles.db'
 
 headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',

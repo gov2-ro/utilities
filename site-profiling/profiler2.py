@@ -7,8 +7,10 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 # Define input and output file paths
-url_list_file = '../data/domainlist.csv'
-db_file = '../data/sites2.db'
+# url_list_file = '../data/domainlist.csv'
+# db_file = '../data/sites2.db'
+url_list_file = '../../data/site-profiles/domainlist2.csv'
+db_file = '../../data/site-profiles/sites-profiles2.db'
 
 # Create SQLite database and table if it doesn't exist
 conn = sqlite3.connect(db_file)
