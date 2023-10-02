@@ -7,6 +7,7 @@ file_path = '../../data/orgs/orgnames.csv'
 target_db = '../../data/orgs/orgsearchddg.db'
 nameCol = 'Denumire'
 extra_search_params=' site:*.ro '
+# for facebook wikipedia etc
 # extra_search_params=' facebook '
 sleep = 0.3
 max_results = 7
