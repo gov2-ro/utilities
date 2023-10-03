@@ -9,12 +9,14 @@ import ssl
 import urllib.parse
 from bs4 import BeautifulSoup
 from tqdm import tqdm
+import xml.etree.ElementTree as ET
+import feedparser
 
 # Define the input CSV file and SQLite database file
 # url_list_file = '../data/domainlist.csv'
 # db_file = '../data/sites.db'
 url_list_file = '../../data/site-profiles/domainlist2.csv'
-db_file = '../../data/site-profiles/sites-profiles-.db'
+db_file = '../../data/site-profiles/sites-profiles22.db'
 # TODO: use If-None-Match / Etag 'If-None-Match': '"848f2-6067ebcfc4f9f-gzip"',
 timeout = 6
 headers = {
@@ -60,9 +62,40 @@ def is_valid_url(url):
     except (requests.exceptions.RequestException, requests.exceptions.HTTPError):
         return False, None
 
+def validate_response(response_text, format):
+    if format.lower() == "json":
+        try:
+            json_data = json.loads(response_text)
+            return "JSON"
+        except ValueError:
+            pass
+
+    elif format.lower() == "xml":
+        try:
+            xml_data = ET.fromstring(response_text)
+            return "XML"
+        except ET.ParseError:
+            pass
+
+    elif format.lower() == "rss":
+        try:
+            rss_data = feedparser.parse(response_text)
+            if rss_data.get('feed', None):
+                return "RSS"
+        except Exception:
+            pass
+
+    # If the specified format is not recognized or parsing fails, return None
+    return None
+
+def get_content(url):
+        response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        response.raise_for_status()
+        return response.text
+
 # Function to fetch data from a URL and extract required information
 def fetch_data(domain):
-    domain = domain.strip()
+    domain = domain.strip('/')
     http_url = f"http://{domain}"
     https_url = f"https://{domain}"
     www_url = f"http://www.{domain}"
@@ -100,9 +133,21 @@ def fetch_data(domain):
         
         wp_json_url = f"{url}/wp-json/"
         wp_json_valid, _ = is_valid_url(wp_json_url)
-        
+        if wp_json_valid:
+            if validate_response(get_content(wp_json_url), 'json') is not None:
+                wp_json_valid = wp_json_url
+            else: 
+                wp_json_valid = 0
+    
+
         sitemap_link = soup.find("link", rel="sitemap")
-        sitemap_url = sitemap_link.get("href") if sitemap_link else None
+        sitemap_url = sitemap_link.get("href") if sitemap_link else url + 'sitemap.xml'
+        if validate_response(get_content(sitemap_url), 'xml') is None:
+                # tqdm.write('sitemap ok')
+                # continue()
+                sitemap_url = 0
+        # else: 
+        #     sitemap_url = 0        
         
         response_time = response.elapsed.total_seconds()
         page_size_html = len(response.text) / (1024 * 1024)  # MB
@@ -151,7 +196,7 @@ with open(url_list_file, 'r') as csvfile:
         data = fetch_data(domain)
         cursor.execute('INSERT INTO sites VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', data)
         conn.commit()
-        
+        tqdm.write(domain)
         # Update counters
         if data[2] is None:  # Title is None (error)
             total_errors += 1
