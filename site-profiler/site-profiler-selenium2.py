@@ -4,11 +4,11 @@ add timeout 15s
 
 # Paths
 domainlist_csv = '../../data/site-profiles/domainlist-institutii-publice.csv'
-domain_column = 'clean'
+domain_column = 'host'
 results_csv = '../../data/site-profiles/selenium-pings-institutii-publice.csv'
 # Define the number of rows to write to CSV at once
 batch_size = 20
-
+timeout = 10
 gecko_driver_path = '/usr/local/bin/geckodriver'
 
 import csv
@@ -18,7 +18,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.proxy import Proxy, ProxyType
 from selenium.webdriver.firefox.service import Service as FirefoxService
- 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -33,12 +32,15 @@ def fetch_website_data(driver, domain, row):
     try:
         # Start the timer for response_time_1
         start_time_1 = time.time()
-
+        rss_feeds = []
+        sitemap_url = None        
         # Open the URL
         driver.get(f'http://{domain}')
 
         # Wait for the page to load completely
-        driver.execute_script("return window.performance.timing.loadEventEnd > 0")
+        # driver.execute_script("return window.performance.timing.loadEventEnd > 0")
+        
+        WebDriverWait(driver, timeout).until(lambda driver: driver.execute_script("return document.readyState === 'complete';"))
         end_time_load = time.time()
 
         # Collect required data
@@ -55,14 +57,14 @@ def fetch_website_data(driver, domain, row):
   
         # Collect RSS feeds from page source (if any)
         page_source = driver.page_source
-        rss_feeds = []
+        
         soup = BeautifulSoup(page_source, 'html.parser')
         link_tags = soup.find_all('link', type='application/rss+xml')
         for link_tag in link_tags:
             rss_feeds.append(link_tag.get('href'))
 
         # Check for sitemap URL in page source
-        sitemap_url = None
+
         try:
             sitemap_tags = soup.find_all('link', rel='sitemap')
             if sitemap_tags:
@@ -101,7 +103,8 @@ options.binary_location = '/usr/bin/firefox'  # Replace with your Firefox binary
 firefox_options = Options()
 driver = webdriver.Firefox(service=FirefoxService(executable_path=gecko_driver_path), options=firefox_options)
 
-
+# driver.set_page_load_timeout(timeout)
+driver.implicitly_wait(timeout)
 # Read domain list from CSV
 with open(domainlist_csv, 'r') as infile:
     reader = csv.DictReader(infile)
@@ -124,6 +127,7 @@ results_data = []
 for i, row in enumerate(rows):
     domain = row[domain_column]
     result_row = fetch_website_data(driver, domain, row)
+    tqdm.write('> ' + domain + ' --> ' + result_row[-3])
     results_data.append(result_row)
     pbar.update(1)
 
