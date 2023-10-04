@@ -1,71 +1,109 @@
-import time
+
 import csv
+import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.common.proxy import Proxy, ProxyType
+from selenium.webdriver.firefox.service import Service as FirefoxService
  
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-# Function to open a URL, collect data, and save it to the output CSV file
-def process_domain(domain, driver, output_csv):
+from tqdm import tqdm
+import requests
+from bs4 import BeautifulSoup
+import xml.etree.ElementTree as ET
+
+# Paths
+domainlist_csv = '../../data/site-profiles/domenii-institutii-centrale.csv'
+domain_column = 'clean'
+results_csv = '../../data/site-profiles/selenium-ping.csv'
+
+# Define the number of rows to write to CSV at once
+batch_size = 20
+
+gecko_driver_path = '/usr/local/bin/geckodriver'
+# Function to fetch the webpage and collect data
+def fetch_website_data(driver, domain, row):
     try:
-        start_time = time.time()
-        driver.get(domain)
+        # Start the timer for response_time_1
+        start_time_1 = time.time()
 
-        # Wait for the page to fully load (you can customize the wait time)
-        time.sleep(5)
+        # Open the URL
+        driver.get(f'http://{domain}')
 
-        response_time_1 = time.time() - start_time
+        # Wait for the page to load completely
+        driver.execute_script("return window.performance.timing.loadEventEnd > 0")
+        end_time_load = time.time()
 
-        # Get the initial response header
-        initial_response_header = str(driver.execute_script("return JSON.stringify(performance.timing)"))
+        # Collect required data
+        final_url = driver.current_url
+        response_time_1 = end_time_load - start_time_1
+        # response_code = driver.execute_script("return JSON.stringify(window.performance.timing)")
+        response_code = driver.execute_script("return window.performance.timing.responseEnd")
 
-        # Wait for the page to fully load (you can customize the wait time)
-        time.sleep(5)
-
-        response_time_final = time.time() - start_time
-
-        # Get the page size
-        page_size = driver.execute_script("return document.documentElement.outerHTML.length")
-        page_size_words = len(driver.execute_script("return document.body.innerText.split(' ')"))
-
-        # Get the last updated timestamp (if available)
-        last_updated = driver.execute_script("return document.lastModified")
-
-        # Save data to the output CSV file
-        with open(output_csv, mode='a', newline='') as csv_file:
-            csv_writer = csv.writer(csv_file)
-            csv_writer.writerow([domain, driver.current_url, response_time_1, initial_response_header, response_time_final, page_size, page_size_words, last_updated, ''])
-            print(domain + ' / ' + driver.current_url + ' / ' + str(response_time_1) + ' / ' + initial_response_header + ' / ' + str(response_time_final) + ' / ' + str(page_size) + ' / ' + str(page_size_words) + ' / ' + str(last_updated))
+        response_time_load = end_time_load - start_time_1
+        page_size = driver.execute_script("return document.body.scrollHeight")
+        page_size_words = len(driver.page_source.split())
+        last_updated = time.strftime('%Y-%m-%d %H:%M:%S')
+        fetch_error = None  # No error if page loaded successfully
 
     except Exception as e:
-        # If there is an error, save the error message
-        with open(output_csv, mode='a', newline='') as csv_file:
-            csv_writer = csv.writer(csv_file)
-            csv_writer.writerow([domain, '', '', '', '', '', '', '', str(e)])
+        # Handle errors
+        final_url = None
+        response_time_1 = None
+        response_code = None
+        response_time_load = None
+        page_size = None
+        page_size_words = None
+        last_updated = None
+        fetch_error = str(e)
 
-# Main function
-def main():
-    input_csv =  '../../data/site-profiles/domainlist2.csv'
-    output_csv =  '../../data/site-profiles/out-x.csv'
+    return [domain, final_url, response_time_1, response_code, response_time_load, page_size, page_size_words, last_updated, fetch_error]
 
-    # Initialize Selenium webdriver (you may need to specify the path to your webdriver executable)
-    driver = webdriver.Chrome()
+# Create a Firefox WebDriver with visible browser
+options = Options()
+options.headless = False
+options.binary_location = '/usr/bin/firefox'  # Replace with your Firefox binary location
+# driver = webdriver.Firefox(options=options, executable_path='/usr/local/bin/geckodriver')  # Replace with your geckodriver path
+firefox_options = Options()
+driver = webdriver.Firefox(service=FirefoxService(executable_path=gecko_driver_path), options=firefox_options)
 
-    # Write CSV header
-    with open(output_csv, mode='w', newline='') as csv_file:
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(['Domain', 'Final_URL', 'Response_Time_1', 'Initial_Response_Header', 'Response_Time_Load', 'Page_Size', 'Page_Size_Words', 'Last_Updated', 'Fetch_Error'])
 
-    # Read domains from input CSV and process each one
-    with open(input_csv, mode='r') as csv_file:
-        csv_reader = csv.DictReader(csv_file)
-        for row in csv_reader:
-            domain = row['Hostname']
-            process_domain(domain, driver, output_csv)
+# Read domain list from CSV
+with open(domainlist_csv, 'r') as infile:
+    reader = csv.DictReader(infile)
+    rows = list(reader)
 
-    # Close the Selenium webdriver
-    driver.quit()
 
-if __name__ == "__main__":
-    main()
+
+# Initialize progress bar
+total_rows = len(rows)
+pbar = tqdm(total=total_rows)
+
+# Write header to results_csv
+header = ["domain", "final_url", "response_time_1", "response_code", "response_time_load", "page_size", "page_size_words", "last_updated", "fetch_error"]
+with open(results_csv, 'w', newline='') as outfile:
+    csv_writer = csv.writer(outfile)
+    csv_writer.writerow(header)
+
+# Loop through the domain list, fetch data, and write to CSV
+results_data = []
+for i, row in enumerate(rows):
+    domain = row[domain_column]
+    result_row = fetch_website_data(driver, domain, row)
+    results_data.append(result_row)
+    pbar.update(1)
+
+    if i % batch_size == 0 or i == total_rows - 1:
+        with open(results_csv, 'a', newline='') as outfile:
+            csv_writer = csv.writer(outfile)
+            csv_writer.writerows(results_data)
+        results_data = []
+
+# Close the progress bar
+pbar.close()
+
+# Close the WebDriver
+driver.quit()
